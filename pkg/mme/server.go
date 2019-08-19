@@ -90,15 +90,8 @@ func (s *Server) sctpListen() (*sctp.SCTPListener, error) {
 	return sctp.ListenSCTP("sctp", addr)
 }
 
-// Start() function initiate MME services.
-func (s *Server) Start() error {
-	if s.done != nil {
-		return fmt.Errorf("Server already started")
-	}
-	s.ch = make(chan unsafe.Pointer, 1024)
-	s.done = make(chan interface{})
-
-	// S1AP packet handler
+// startHandler start S1AP packet handler.
+func (s *Server) startHandler() {
 	s.wg.Add(1)
 	go func() {
 		defer s.wg.Done()
@@ -107,14 +100,18 @@ func (s *Server) Start() error {
 			case p := <-s.ch:
 				log.Println("Message received")
 				s1ap.XerPrint(p)
+				// If this is S1SETUP_REQUEST.
+				// Reply S1SETUP_REPLY.
 				s1ap.Free(p)
 			case <-s.done:
 				return
 			}
 		}
 	}()
+}
 
-	// SCTP server goroutine.
+// startServer start SCTP server.
+func (s *Server) startServer() {
 	s.wg.Add(1)
 	go func() {
 		defer s.wg.Done()
@@ -155,6 +152,19 @@ func (s *Server) Start() error {
 			}
 		}
 	}()
+}
+
+// Start() function initiate MME services.
+func (s *Server) Start() error {
+	if s.done != nil {
+		return fmt.Errorf("Server already started")
+	}
+	s.ch = make(chan unsafe.Pointer, 1024)
+	s.done = make(chan interface{})
+
+	s.startHandler()
+	s.startServer()
+
 	return nil
 }
 
