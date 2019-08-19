@@ -21,6 +21,7 @@ type Server struct {
 	conf ServerConfig
 	ln   *sctp.SCTPListener
 	wg   sync.WaitGroup
+	ch   chan unsafe.Pointer
 	done chan interface{}
 }
 
@@ -74,8 +75,7 @@ func (s *Server) serveClient(conn net.Conn, infoSize int) error {
 		if err != nil {
 			return fmt.Errorf("S1AP decode error")
 		}
-		s1ap.XerPrint(p)
-		s1ap.Free(p)
+		s.ch <- p
 	}
 }
 
@@ -95,12 +95,31 @@ func (s *Server) Start() error {
 	if s.done != nil {
 		return fmt.Errorf("Server already started")
 	}
-	s.wg.Add(1)
+	s.ch = make(chan unsafe.Pointer, 1024)
 	s.done = make(chan interface{})
-	infoSize := SCTPInfoSize()
 
+	// S1AP packet handler
+	s.wg.Add(1)
 	go func() {
 		defer s.wg.Done()
+		for {
+			select {
+			case p := <-s.ch:
+				log.Println("Message received")
+				s1ap.XerPrint(p)
+				s1ap.Free(p)
+			case <-s.done:
+				return
+			}
+		}
+	}()
+
+	// SCTP server goroutine.
+	s.wg.Add(1)
+	go func() {
+		defer s.wg.Done()
+
+		infoSize := SCTPInfoSize()
 		for {
 		retry:
 			ln, err := s.sctpListen()
