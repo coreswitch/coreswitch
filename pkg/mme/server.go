@@ -63,6 +63,7 @@ func (s *Server) serveClient(conn net.Conn, infoSize int) error {
 		SCTPDumpBuf(buf)
 
 		p, err := s1ap.Decode(buf)
+		s1ap.XerPrint(p)
 	}
 }
 

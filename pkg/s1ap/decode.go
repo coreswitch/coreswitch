@@ -8,7 +8,7 @@ import (
 	"unsafe"
 )
 
-func Decode(buf []byte) {
+func Decode(buf []byte) (unsafe.Pointer, error) {
 	message := C.malloc(C.sizeof_struct_S1AP_PDU)
 	var opt_codec *C.asn_codec_ctx_t = nil
 
@@ -21,5 +21,9 @@ func Decode(buf []byte) {
 		0,
 		0)
 
-	C.xer_fprint(C.stdout, &C.asn_DEF_S1AP_PDU, unsafe.Pointer(message))
+	return message, nil
+}
+
+func XerPrint(message unsafe.Pointer) {
+	C.xer_fprint(C.stdout, &C.asn_DEF_S1AP_PDU, message)
 }
