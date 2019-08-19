@@ -37,10 +37,18 @@ func SCTPInfoSize() int {
 	return int(unsafe.Sizeof(info))
 }
 
+func SCTPDumpBuf(buf []byte) {
+	fmt.Printf("len of buf %d\n", len(buf))
+	for i := 0; i < len(buf); i++ {
+		fmt.Printf("%2x ", buf[i])
+	}
+	fmt.Printf("\n")
+}
+
 func (s *Server) serveClient(conn net.Conn, infoSize int) error {
 	for {
 		bufsize := 2048
-		buf := make([]byte, bufsize+128) // add overhead of SCTPSndRcvInfoWrappedConn
+		buf := make([]byte, bufsize+128) // Add overhead of SCTPSndRcvInfoWrappedConn
 
 		n, err := conn.Read(buf)
 		if err != nil {
@@ -52,14 +60,9 @@ func (s *Server) serveClient(conn net.Conn, infoSize int) error {
 		log.Printf("Read length: %d", n)
 
 		buf = buf[infoSize:n]
+		SCTPDumpBuf(buf)
 
-		fmt.Printf("len of buf %d\n", len(buf))
-		for i := 0; i < len(buf); i++ {
-			fmt.Printf("%2x ", buf[i])
-		}
-		fmt.Printf("\n")
-
-		s1ap.Decode(buf)
+		p, err := s1ap.Decode(buf)
 	}
 }
 
