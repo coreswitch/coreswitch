@@ -1,0 +1,3 @@
+Makefile.am.libasncodec
+*.o
+libs1ap.a
