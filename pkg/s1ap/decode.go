@@ -38,8 +38,8 @@ func S1AP_Initiating2String(k C.InitiatingMessage__value_PR) string {
 	}
 }
 
-func Decode(buf []byte) (unsafe.Pointer, error) {
-	packet := C.malloc(C.sizeof_struct_S1AP_PDU)
+func Decode(buf []byte) (unsafe.Pointer, int, error) {
+	packet := C.calloc(C.sizeof_struct_S1AP_PDU, 1)
 	var opt_codec *C.asn_codec_ctx_t = nil
 
 	ret := C.aper_decode(
@@ -53,27 +53,28 @@ func Decode(buf []byte) (unsafe.Pointer, error) {
 
 	if ret.code != C.RC_OK {
 		C.free(packet)
-		return nil, fmt.Errorf("aper_decode failed: %d", ret)
+		return nil, 0, fmt.Errorf("aper_decode failed: %d", ret)
 	}
 
 	pdu := (*C.S1AP_PDU_t)(packet)
 	log.Println("PDU type:", S1AP_PDU2String(pdu.present))
 
+	typ := 0
 	switch pdu.present {
 	case C.S1AP_PDU_PR_NOTHING:
 	case C.S1AP_PDU_PR_initiatingMessage:
 		msg := *(**C.InitiatingMessage_t)(unsafe.Pointer(&pdu.choice))
 		log.Println("Message type:", S1AP_Initiating2String(msg.value.present))
-
 		switch msg.value.present {
 		case C.InitiatingMessage__value_PR_S1SetupRequest:
+			typ = S1_SETUP_REQUEST
 		default:
 		}
 	case C.S1AP_PDU_PR_successfulOutcome:
 	case C.S1AP_PDU_PR_unsuccessfulOutcome:
 	default:
 	}
-	return packet, nil
+	return packet, typ, nil
 }
 
 func XerPrint(message unsafe.Pointer) {

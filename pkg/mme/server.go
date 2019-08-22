@@ -16,12 +16,19 @@ type ServerConfig struct {
 	retryTime time.Duration
 }
 
+// Server message.
+type message struct {
+	conn net.Conn
+	p    unsafe.Pointer
+	typ  int
+}
+
 // Server is MME top level structure.
 type Server struct {
 	conf ServerConfig
 	ln   *sctp.SCTPListener
 	wg   sync.WaitGroup
-	ch   chan unsafe.Pointer
+	ch   chan *message
 	done chan interface{}
 }
 
@@ -71,11 +78,11 @@ func (s *Server) serveClient(conn net.Conn, infoSize int) error {
 		buf = buf[infoSize:n]
 		SCTPDumpBuf(buf)
 
-		p, err := s1ap.Decode(buf)
+		p, typ, err := s1ap.Decode(buf)
 		if err != nil {
 			return fmt.Errorf("S1AP decode error")
 		}
-		s.ch <- p
+		s.ch <- &message{conn, p, typ}
 	}
 }
 
@@ -97,12 +104,18 @@ func (s *Server) startHandler() {
 		defer s.wg.Done()
 		for {
 			select {
-			case p := <-s.ch:
+			case msg := <-s.ch:
 				log.Println("Message received")
-				s1ap.XerPrint(p)
-				// If this is S1SETUP_REQUEST.
-				// Reply S1SETUP_REPLY.
-				s1ap.Free(p)
+				s1ap.XerPrint(msg.p)
+				switch msg.typ {
+				case s1ap.S1_SETUP_REQUEST:
+					fmt.Println("S1 SETUP REQUEST")
+					s1ap.S1SetupResponse()
+					// s.Send(conn, p)
+				default:
+					fmt.Println("UNKNOWN MESSAGE")
+				}
+				s1ap.Free(msg.p)
 			case <-s.done:
 				return
 			}
@@ -159,7 +172,7 @@ func (s *Server) Start() error {
 	if s.done != nil {
 		return fmt.Errorf("Server already started")
 	}
-	s.ch = make(chan unsafe.Pointer, 1024)
+	s.ch = make(chan *message, 1024)
 	s.done = make(chan interface{})
 
 	s.startHandler()
