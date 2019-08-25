@@ -18,12 +18,6 @@ func S1SetupResponse() ([]byte, error) {
 
 	// encode
 	return Encode(pdu)
-
-	//fmt.Println(buf)
-
-	// defer func() {
-	// 	C.free(unsafe.Pointer(pdu))
-	// }()
 }
 
 const (

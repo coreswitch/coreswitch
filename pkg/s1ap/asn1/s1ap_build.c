@@ -67,18 +67,18 @@ S1SetupResponseBuild(S1AP_PDU_t *pdu, int num_served_gummei) {
 
   ASN_SEQUENCE_ADD(&gmmei->list, gmmei_item);
 
-  /* ie = calloc(sizeof(S1SetupResponseIEs_t), 1); */
-  /* ASN_SEQUENCE_ADD(&response->protocolIEs, ie); */
+  // ProtocolIEs for relative MME capacity.
+  ie = calloc(sizeof(S1SetupResponseIEs_t), 1);
+  ASN_SEQUENCE_ADD(&response->protocolIEs, ie);
 
-  /* ie->id = ProtocolIE_ID_id_RelativeMMECapacity; */
-  /* ie->criticality = Criticality_ignore; */
-  /* ie->value.present = S1SetupResponseIEs__value_PR_RelativeMMECapacity; */
+  // Relative MME capacity.
+  ie->id = ProtocolIE_ID_id_RelativeMMECapacity;
+  ie->criticality = Criticality_ignore;
+  ie->value.present = S1SetupResponseIEs__value_PR_RelativeMMECapacity;
 
-  /* relative = &ie->value.choice.RelativeMMECapacity; */
-
-  /* for (int i = 0; i < num_served_gummei; i++) { */
-  /*   ; */
-  /* } */
+  // Relative MME capacity value.
+  relative = &ie->value.choice.RelativeMMECapacity;
+  *relative = 10;
 }
 
 void
