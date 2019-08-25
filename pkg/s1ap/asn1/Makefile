@@ -3,6 +3,7 @@ all:
 	@echo "make install - install S1AP library"
 	@echo "make gen - regenerate C file from ASN file"
 	@echo "make clean - clean up"
+	@echo "make s1ap - build S1AP APP"
 
 lib:
 	gcc -I. -c *.c
@@ -13,6 +14,9 @@ gen:
 
 install:
 	cp libs1ap.a /usr/local/lib
+
+s1ap:
+	gcc -I. -c -o s1ap_build.o s1ap_build.c
 
 clean:
 	rm -f *.[cho] Makefile.am Makefile.am.libasncodec libs1ap.a

@@ -18,9 +18,10 @@ type ServerConfig struct {
 
 // Server message.
 type message struct {
-	conn net.Conn
-	p    unsafe.Pointer
-	typ  int
+	conn   net.Conn
+	header []byte
+	p      unsafe.Pointer
+	typ    int
 }
 
 // Server is MME top level structure.
@@ -66,6 +67,7 @@ func (s *Server) serveClient(conn net.Conn, infoSize int) error {
 	for {
 		buf := SCTPBuffer()
 
+		fmt.Println("Read ready")
 		n, err := conn.Read(buf)
 		if err != nil {
 			return err
@@ -75,14 +77,15 @@ func (s *Server) serveClient(conn net.Conn, infoSize int) error {
 		}
 		log.Printf("Read length: %d", n)
 
-		buf = buf[infoSize:n]
-		SCTPDumpBuf(buf)
+		header := buf[:infoSize]
+		payload := buf[infoSize:n]
+		SCTPDumpBuf(payload)
 
-		p, typ, err := s1ap.Decode(buf)
+		p, typ, err := s1ap.Decode(payload)
 		if err != nil {
 			return fmt.Errorf("S1AP decode error")
 		}
-		s.ch <- &message{conn, p, typ}
+		s.ch <- &message{conn, header, p, typ}
 	}
 }
 
@@ -95,6 +98,16 @@ func (s *Server) sctpListen() (*sctp.SCTPListener, error) {
 	}
 
 	return sctp.ListenSCTP("sctp", addr)
+}
+
+func (s *Server) send(conn net.Conn, buf []byte) {
+	fmt.Println("conn", conn)
+	n, err := conn.Write(buf[:])
+	if err != nil {
+		log.Printf("write failed: %v", err)
+	} else {
+		log.Printf("write success %v bytes written!", n)
+	}
 }
 
 // startHandler start S1AP packet handler.
@@ -110,8 +123,21 @@ func (s *Server) startHandler() {
 				switch msg.typ {
 				case s1ap.S1_SETUP_REQUEST:
 					fmt.Println("S1 SETUP REQUEST")
-					s1ap.S1SetupResponse()
-					// s.Send(conn, p)
+					payload, err := s1ap.S1SetupResponse()
+					if err != nil {
+						fmt.Println("S1SetupResponse error")
+						continue
+					}
+					SCTPDumpBuf(payload)
+
+					fmt.Println("header len", len(msg.header))
+					fmt.Println("payload len", len(payload))
+
+					buf := append(msg.header, payload...)
+
+					fmt.Println("packet len", len(buf))
+
+					s.send(msg.conn, buf)
 				default:
 					fmt.Println("UNKNOWN MESSAGE")
 				}

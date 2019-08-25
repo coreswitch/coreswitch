@@ -4,6 +4,7 @@ package s1ap
 // #cgo LDFLAGS: -L/usr/local/lib -ls1ap
 // #include "S1AP-PDU.h"
 // #include "SuccessfulOutcome.h"
+// #include "s1ap_build.h"
 import "C"
 import (
 	"fmt"
@@ -11,35 +12,25 @@ import (
 	"unsafe"
 )
 
-func S1SetupResponse() {
+func S1SetupResponse() ([]byte, error) {
 	pdu := (*C.S1AP_PDU_t)(C.calloc(C.sizeof_struct_S1AP_PDU, 1))
-	pdu.present = C.S1AP_PDU_PR_successfulOutcome
-
-	msg := (*C.SuccessfulOutcome_t)(C.calloc(C.sizeof_struct_SuccessfulOutcome, 1))
-	msg.value.present = C.SuccessfulOutcome__value_PR_S1SetupResponse
-	ptr1 := (**C.SuccessfulOutcome_t)(unsafe.Pointer(&pdu.choice))
-	*ptr1 = msg
-
-	val := (*C.S1SetupResponse_t)(C.calloc(C.sizeof_struct_S1SetupResponse, 1))
-	ptr2 := (**C.S1SetupResponse_t)(unsafe.Pointer(&msg.value.choice))
-	*ptr2 = val
+	C.S1SetupResponseBuild(pdu, 0)
 
 	// encode
-	buf := Encode(pdu)
-	fmt.Println(buf)
+	return Encode(pdu)
 
-	defer func() {
-		C.free(unsafe.Pointer(val))
-		C.free(unsafe.Pointer(msg))
-		C.free(unsafe.Pointer(pdu))
-	}()
+	//fmt.Println(buf)
+
+	// defer func() {
+	// 	C.free(unsafe.Pointer(pdu))
+	// }()
 }
 
 const (
 	MAX_SDU_LEN = 8192
 )
 
-func Encode(pdu *C.S1AP_PDU_t) []byte {
+func Encode(pdu *C.S1AP_PDU_t) ([]byte, error) {
 	var constraints *C.asn_per_constraints_t = nil
 	buf := make([]byte, MAX_SDU_LEN)
 
@@ -51,11 +42,11 @@ func Encode(pdu *C.S1AP_PDU_t) []byte {
 		MAX_SDU_LEN)
 
 	if ret.encoded < 0 {
-		log.Printf("XXX encode error")
-	} else {
-		log.Printf("XXX encode success", ret.encoded)
-		buf = buf[:ret.encoded]
+		return nil, fmt.Errorf("Encode() error %v", ret)
 	}
+	len := ret.encoded >> 3
+	log.Printf("Encode() success", ret.encoded, len)
+	buf = buf[:len]
 
-	return buf
+	return buf, nil
 }
