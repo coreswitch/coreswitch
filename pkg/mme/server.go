@@ -90,8 +90,10 @@ func (s *Server) serveClient(conn net.Conn, infoSize int) error {
 }
 
 func (s *Server) sctpListen() (*sctp.SCTPListener, error) {
-	ips := []net.IPAddr{}
-
+	ipaddr := net.IPAddr{
+		IP: net.ParseIP("172.16.0.53"),
+	}
+	ips := []net.IPAddr{ipaddr}
 	addr := &sctp.SCTPAddr{
 		IPAddrs: ips,
 		Port:    S1AP_PORT_NUMBER,
