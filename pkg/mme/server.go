@@ -124,24 +124,27 @@ func (s *Server) startHandler() {
 				s1ap.XerPrint(msg.p)
 				switch msg.typ {
 				case s1ap.S1_SETUP_REQUEST:
-					fmt.Println("S1 SETUP REQUEST")
+					log.Println("S1 SETUP REQUEST")
 					payload, err := s1ap.S1SetupResponse()
 					if err != nil {
-						fmt.Println("S1SetupResponse error")
+						log.Println("S1SetupResponse error")
 						continue
 					}
 					SCTPDumpBuf(payload)
-
-					fmt.Println("header len", len(msg.header))
-					fmt.Println("payload len", len(payload))
-
 					buf := append(msg.header, payload...)
-
-					fmt.Println("packet len", len(buf))
-
+					s.send(msg.conn, buf)
+				case s1ap.INITIAL_UE_MESSAGE:
+					log.Println("INITIAL UE MESSAGE")
+					payload, err := s1ap.DownlinkNASTransport()
+					if err != nil {
+						log.Println("DownlinkNASTransport error")
+						continue
+					}
+					SCTPDumpBuf(payload)
+					buf := append(msg.header, payload...)
 					s.send(msg.conn, buf)
 				default:
-					fmt.Println("UNKNOWN MESSAGE")
+					log.Println("UNKNOWN MESSAGE")
 				}
 				s1ap.Free(msg.p)
 			case <-s.done:

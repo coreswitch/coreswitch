@@ -15,8 +15,18 @@ import (
 func S1SetupResponse() ([]byte, error) {
 	pdu := (*C.S1AP_PDU_t)(C.calloc(C.sizeof_struct_S1AP_PDU, 1))
 	C.S1SetupResponseBuild(pdu, 0)
+	return Encode(pdu)
+}
 
-	// encode
+func DownlinkNASTransport() ([]byte, error) {
+	pdu := (*C.S1AP_PDU_t)(C.calloc(C.sizeof_struct_S1AP_PDU, 1))
+	C.DownlinkNASTransportBuild(pdu)
+	return Encode(pdu)
+}
+
+func UplinkNASTransport() ([]byte, error) {
+	pdu := (*C.S1AP_PDU_t)(C.calloc(C.sizeof_struct_S1AP_PDU, 1))
+	C.UplinkNASTransportBuild(pdu)
 	return Encode(pdu)
 }
 

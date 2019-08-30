@@ -1,5 +1,6 @@
 #include "S1AP-PDU.h"
 #include "SuccessfulOutcome.h"
+#include "InitiatingMessage.h"
 #include "ProtocolIE-Field.h"
 #include "ServedGUMMEIsItem.h"
 
@@ -15,8 +16,8 @@ s1ap_buffer_to_OCTET_STRING(void *buf, int size, TBCD_STRING_t *tbcd_string)
 }
 
 void
-S1SetupResponseBuild(S1AP_PDU_t *pdu, int num_served_gummei) {
-  // S1AP_PDU_t pdu;
+S1SetupResponseBuild(S1AP_PDU_t *pdu, int num_served_gummei)
+{
   SuccessfulOutcome_t *outcome = calloc(sizeof(SuccessfulOutcome_t), 1);
   S1SetupResponse_t *response = NULL;
   S1SetupResponseIEs_t *ie = NULL;
@@ -82,5 +83,76 @@ S1SetupResponseBuild(S1AP_PDU_t *pdu, int num_served_gummei) {
 }
 
 void
-S1SetupResponseFree() {
+S1SetupFailureBuild(S1AP_PDU_t *pdu)
+{
+}
+
+void
+DownlinkNASTransportBuild(S1AP_PDU_t *pdu)
+{
+  InitiatingMessage_t *initiating = calloc(sizeof(InitiatingMessage_t), 1);
+  DownlinkNASTransport_t *downlink = NULL;
+  DownlinkNASTransport_IEs_t *ie = NULL;
+  MME_UE_S1AP_ID_t *mme_ue_s1ap_id = NULL;
+  ENB_UE_S1AP_ID_t *enb_ue_s1ap_id = NULL;
+  NAS_PDU_t *nas_pdu = NULL;
+
+  memset(pdu, 0, sizeof(S1AP_PDU_t));
+
+  pdu->present = S1AP_PDU_PR_initiatingMessage;
+  pdu->choice.initiatingMessage = initiating;
+
+  initiating->procedureCode = ProcedureCode_id_downlinkNASTransport;
+  initiating->criticality = Criticality_ignore;
+  initiating->value.present = InitiatingMessage__value_PR_DownlinkNASTransport;
+
+  downlink = &initiating->value.choice.DownlinkNASTransport;
+
+  // MME UE.
+  ie = calloc(sizeof(DownlinkNASTransport_IEs_t), 1);
+  ASN_SEQUENCE_ADD(&downlink->protocolIEs, ie);
+
+  ie->id = ProtocolIE_ID_id_MME_UE_S1AP_ID;
+  ie->criticality = Criticality_reject;
+  ie->value.present = DownlinkNASTransport_IEs__value_PR_ENB_UE_S1AP_ID;
+
+  mme_ue_s1ap_id = &ie->value.choice.MME_UE_S1AP_ID;
+
+  // eNB UE.
+  ie = calloc(sizeof(DownlinkNASTransport_IEs_t), 1);
+  ASN_SEQUENCE_ADD(&downlink->protocolIEs, ie);
+
+  ie->id = ProtocolIE_ID_id_eNB_UE_S1AP_ID;
+  ie->criticality = Criticality_reject;
+  ie->value.present = DownlinkNASTransport_IEs__value_PR_ENB_UE_S1AP_ID;
+
+  enb_ue_s1ap_id = &ie->value.choice.ENB_UE_S1AP_ID;
+
+  // NAS PDU.
+  ie = calloc(sizeof(DownlinkNASTransport_IEs_t), 1);
+  ASN_SEQUENCE_ADD(&downlink->protocolIEs, ie);
+
+  ie->id = ProtocolIE_ID_id_NAS_PDU;
+  ie->criticality = Criticality_reject;
+  ie->value.present = DownlinkNASTransport_IEs__value_PR_NAS_PDU;
+
+  nas_pdu = &ie->value.choice.NAS_PDU;
+
+  // Fill in values.
+  *mme_ue_s1ap_id = 1;
+  *enb_ue_s1ap_id = 12928116;
+
+  nas_pdu->size = 36;
+  nas_pdu->buf = calloc(36, 1);
+  unsigned char nas_pdu_data[36] = { 0x07,0x52,0x00,0x37,0x74,0x76,0x61,0x5c,
+                                     0xb6,0xd3,0x7a,0x91,0x7d,0x05,0x72,0x74,
+                                     0x61,0xb2,0x41,0x10,0x7e,0x0f,0x9d,0x7d,
+                                     0x5a,0xcb,0x80,0x00,0x9f,0xb3,0xb3,0x19,
+                                     0x2a,0x4c,0x72,0x12 };
+  memcpy(nas_pdu->buf, nas_pdu_data, 36);
+}
+
+void
+UplinkNASTransportBuild(S1AP_PDU_t *pdu)
+{
 }

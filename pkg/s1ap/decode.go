@@ -130,6 +130,8 @@ func Decode(buf []byte) (unsafe.Pointer, int, error) {
 		switch msg.value.present {
 		case C.InitiatingMessage__value_PR_S1SetupRequest:
 			typ = S1_SETUP_REQUEST
+		case C.InitiatingMessage__value_PR_InitialUEMessage:
+			typ = INITIAL_UE_MESSAGE
 		default:
 		}
 	case C.S1AP_PDU_PR_successfulOutcome:

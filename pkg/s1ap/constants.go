@@ -1,6 +1,7 @@
 package s1ap
 
 const (
-	S1_SETUP_REQUEST = iota
+	S1_SETUP_REQUEST = iota + 1
 	S1_SETUP_RESPONSE
+	INITIAL_UE_MESSAGE
 )
