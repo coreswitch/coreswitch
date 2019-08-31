@@ -4,10 +4,12 @@ package s1ap
 // #cgo LDFLAGS: -L/usr/local/lib -ls1ap
 // #include "S1AP-PDU.h"
 // #include "InitiatingMessage.h"
+// #include "ProtocolIE-Field.h"
 import "C"
 import (
 	"fmt"
 	"log"
+	"reflect"
 	"unsafe"
 )
 
@@ -100,6 +102,30 @@ func S1AP_Initiating2String(k C.InitiatingMessage__value_PR) string {
 	}
 }
 
+func S1AP_InitialUEMessageHandle(val *C.InitialUEMessage_t) {
+	var ies []*C.UplinkNASTransport_IEs_t
+	slice := (*reflect.SliceHeader)((unsafe.Pointer(&ies)))
+	slice.Cap = (int)(val.protocolIEs.list.count)
+	slice.Len = (int)(val.protocolIEs.list.count)
+	slice.Data = uintptr(unsafe.Pointer(val.protocolIEs.list.array))
+
+	for _, ie := range ies {
+		switch ie.id {
+		case C.ProtocolIE_ID_id_eNB_UE_S1AP_ID:
+			//ENB_UE_S1AP_ID = &ie->value.choice.ENB_UE_S1AP_ID;
+		case C.ProtocolIE_ID_id_NAS_PDU:
+			//NAS_PDU = &ie->value.choice.NAS_PDU;
+		case C.ProtocolIE_ID_id_TAI:
+			//TAI = &ie->value.choice.TAI;
+		case C.ProtocolIE_ID_id_EUTRAN_CGI:
+			//EUTRAN_CGI = &ie->value.choice.EUTRAN_CGI;
+		case C.ProtocolIE_ID_id_S_TMSI:
+			//S_TMSI = &ie->value.choice.S_TMSI;
+		default:
+		}
+	}
+}
+
 func Decode(buf []byte) (unsafe.Pointer, int, error) {
 	packet := C.calloc(C.sizeof_struct_S1AP_PDU, 1)
 	var opt_codec *C.asn_codec_ctx_t = nil
@@ -131,6 +157,8 @@ func Decode(buf []byte) (unsafe.Pointer, int, error) {
 		case C.InitiatingMessage__value_PR_S1SetupRequest:
 			typ = S1_SETUP_REQUEST
 		case C.InitiatingMessage__value_PR_InitialUEMessage:
+			val := (*C.InitialUEMessage_t)(unsafe.Pointer(&msg.value.choice))
+			S1AP_InitialUEMessageHandle(val)
 			typ = INITIAL_UE_MESSAGE
 		default:
 		}
