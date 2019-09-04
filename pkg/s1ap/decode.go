@@ -102,17 +102,25 @@ func S1AP_Initiating2String(k C.InitiatingMessage__value_PR) string {
 	}
 }
 
-func S1AP_InitialUEMessageHandle(val *C.InitialUEMessage_t) {
+func InitialUEMessageHandle(packet unsafe.Pointer) (int32, error) {
+	pdu := (*C.S1AP_PDU_t)(packet)
+	msg := *(**C.InitiatingMessage_t)(unsafe.Pointer(&pdu.choice))
+	val := (*C.InitialUEMessage_t)(unsafe.Pointer(&msg.value.choice))
+
 	var ies []*C.UplinkNASTransport_IEs_t
 	slice := (*reflect.SliceHeader)((unsafe.Pointer(&ies)))
 	slice.Cap = (int)(val.protocolIEs.list.count)
 	slice.Len = (int)(val.protocolIEs.list.count)
 	slice.Data = uintptr(unsafe.Pointer(val.protocolIEs.list.array))
 
+	var enb_ie_s1ap_id int32
+
 	for _, ie := range ies {
 		switch ie.id {
 		case C.ProtocolIE_ID_id_eNB_UE_S1AP_ID:
-			//ENB_UE_S1AP_ID = &ie->value.choice.ENB_UE_S1AP_ID;
+			// ENB-UE-S1AP-ID.h:typedef long	 ENB_UE_S1AP_ID_t;
+			enb_ie_s1ap_id_c := (*C.ENB_UE_S1AP_ID_t)(unsafe.Pointer(&ie.value.choice))
+			enb_ie_s1ap_id = (int32)(*enb_ie_s1ap_id_c)
 		case C.ProtocolIE_ID_id_NAS_PDU:
 			//NAS_PDU = &ie->value.choice.NAS_PDU;
 		case C.ProtocolIE_ID_id_TAI:
@@ -124,6 +132,7 @@ func S1AP_InitialUEMessageHandle(val *C.InitialUEMessage_t) {
 		default:
 		}
 	}
+	return enb_ie_s1ap_id, nil
 }
 
 func Decode(buf []byte) (unsafe.Pointer, int, error) {
@@ -157,8 +166,7 @@ func Decode(buf []byte) (unsafe.Pointer, int, error) {
 		case C.InitiatingMessage__value_PR_S1SetupRequest:
 			typ = S1_SETUP_REQUEST
 		case C.InitiatingMessage__value_PR_InitialUEMessage:
-			val := (*C.InitialUEMessage_t)(unsafe.Pointer(&msg.value.choice))
-			S1AP_InitialUEMessageHandle(val)
+			//InitialUEMessageHandle(packet)
 			typ = INITIAL_UE_MESSAGE
 		default:
 		}

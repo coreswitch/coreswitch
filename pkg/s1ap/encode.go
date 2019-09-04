@@ -18,9 +18,9 @@ func S1SetupResponse() ([]byte, error) {
 	return Encode(pdu)
 }
 
-func DownlinkNASTransport() ([]byte, error) {
+func DownlinkNASTransport(enb_ie_s1ap_id int32) ([]byte, error) {
 	pdu := (*C.S1AP_PDU_t)(C.calloc(C.sizeof_struct_S1AP_PDU, 1))
-	C.DownlinkNASTransportBuild(pdu)
+	C.DownlinkNASTransportBuild(pdu, (C.long)(enb_ie_s1ap_id))
 	return Encode(pdu)
 }
 

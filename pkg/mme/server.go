@@ -135,7 +135,11 @@ func (s *Server) startHandler() {
 					s.send(msg.conn, buf)
 				case s1ap.INITIAL_UE_MESSAGE:
 					log.Println("INITIAL UE MESSAGE")
-					payload, err := s1ap.DownlinkNASTransport()
+					// Parse the message.
+					enb_ie_s1ap_id, err := s1ap.InitialUEMessageHandle(msg.p)
+					fmt.Println("YYY enb_ie_s1ap_id", enb_ie_s1ap_id)
+
+					payload, err := s1ap.DownlinkNASTransport(enb_ie_s1ap_id)
 					if err != nil {
 						log.Println("DownlinkNASTransport error")
 						continue

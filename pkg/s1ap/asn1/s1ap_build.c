@@ -88,7 +88,7 @@ S1SetupFailureBuild(S1AP_PDU_t *pdu)
 }
 
 void
-DownlinkNASTransportBuild(S1AP_PDU_t *pdu)
+DownlinkNASTransportBuild(S1AP_PDU_t *pdu, long enb_ie_s1ap_id)
 {
   InitiatingMessage_t *initiating = calloc(sizeof(InitiatingMessage_t), 1);
   DownlinkNASTransport_t *downlink = NULL;
@@ -140,7 +140,7 @@ DownlinkNASTransportBuild(S1AP_PDU_t *pdu)
 
   // Fill in values.
   *mme_ue_s1ap_id = 1;
-  *enb_ue_s1ap_id = 12928116;
+  *enb_ue_s1ap_id = enb_ie_s1ap_id;
 
   nas_pdu->size = 36;
   nas_pdu->buf = calloc(36, 1);
