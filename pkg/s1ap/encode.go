@@ -18,9 +18,13 @@ func S1SetupResponse() ([]byte, error) {
 	return Encode(pdu)
 }
 
-func DownlinkNASTransport(enb_ie_s1ap_id int32) ([]byte, error) {
+func DownlinkNASTransport(enb_ie_s1ap_id int32, mmebuf []byte) ([]byte, error) {
+	fmt.Println("XXX", len(mmebuf))
 	pdu := (*C.S1AP_PDU_t)(C.calloc(C.sizeof_struct_S1AP_PDU, 1))
-	C.DownlinkNASTransportBuild(pdu, (C.long)(enb_ie_s1ap_id))
+	C.DownlinkNASTransportBuild(pdu,
+		(C.long)(enb_ie_s1ap_id),
+		(*C.uchar)((unsafe.Pointer)(&mmebuf[0])),
+		(C.int)(len(mmebuf)))
 	return Encode(pdu)
 }
 

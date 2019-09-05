@@ -88,7 +88,7 @@ S1SetupFailureBuild(S1AP_PDU_t *pdu)
 }
 
 void
-DownlinkNASTransportBuild(S1AP_PDU_t *pdu, long enb_ie_s1ap_id)
+DownlinkNASTransportBuild(S1AP_PDU_t *pdu, long enb_ie_s1ap_id, unsigned char *mmebuf, int mmebuf_len)
 {
   InitiatingMessage_t *initiating = calloc(sizeof(InitiatingMessage_t), 1);
   DownlinkNASTransport_t *downlink = NULL;
@@ -142,14 +142,18 @@ DownlinkNASTransportBuild(S1AP_PDU_t *pdu, long enb_ie_s1ap_id)
   *mme_ue_s1ap_id = 1;
   *enb_ue_s1ap_id = enb_ie_s1ap_id;
 
-  nas_pdu->size = 36;
-  nas_pdu->buf = calloc(36, 1);
-  unsigned char nas_pdu_data[36] = { 0x07,0x52,0x00,0x37,0x74,0x76,0x61,0x5c,
-                                     0xb6,0xd3,0x7a,0x91,0x7d,0x05,0x72,0x74,
-                                     0x61,0xb2,0x41,0x10,0x7e,0x0f,0x9d,0x7d,
-                                     0x5a,0xcb,0x80,0x00,0x9f,0xb3,0xb3,0x19,
-                                     0x2a,0x4c,0x72,0x12 };
-  memcpy(nas_pdu->buf, nas_pdu_data, 36);
+  nas_pdu->size = mmebuf_len;
+  nas_pdu->buf = calloc(mmebuf_len, 1);
+  memcpy(nas_pdu->buf, mmebuf, mmebuf_len);
+
+  /* nas_pdu->size = 36; */
+  /* nas_pdu->buf = calloc(36, 1); */
+  /* unsigned char nas_pdu_data[36] = { 0x07,0x52,0x00,0x37,0x74,0x76,0x61,0x5c, */
+  /*                                    0xb6,0xd3,0x7a,0x91,0x7d,0x05,0x72,0x74, */
+  /*                                    0x61,0xb2,0x41,0x10,0x7e,0x0f,0x9d,0x7d, */
+  /*                                    0x5a,0xcb,0x80,0x00,0x9f,0xb3,0xb3,0x19, */
+  /*                                    0x2a,0x4c,0x72,0x12 }; */
+  /* memcpy(nas_pdu->buf, nas_pdu_data, 36); */
 }
 
 void

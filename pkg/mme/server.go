@@ -26,11 +26,12 @@ type message struct {
 
 // Server is MME top level structure.
 type Server struct {
-	conf ServerConfig
-	ln   *sctp.SCTPListener
-	wg   sync.WaitGroup
-	ch   chan *message
-	done chan interface{}
+	conf           ServerConfig
+	ln             *sctp.SCTPListener
+	wg             sync.WaitGroup
+	ch             chan *message
+	done           chan interface{}
+	enb_ie_s1ap_id int32
 }
 
 func NewServer() *Server {
@@ -67,7 +68,6 @@ func (s *Server) serveClient(conn net.Conn, infoSize int) error {
 	for {
 		buf := SCTPBuffer()
 
-		fmt.Println("Read ready")
 		n, err := conn.Read(buf)
 		if err != nil {
 			return err
@@ -120,7 +120,6 @@ func (s *Server) startHandler() {
 		for {
 			select {
 			case msg := <-s.ch:
-				log.Println("Message received")
 				s1ap.XerPrint(msg.p)
 				switch msg.typ {
 				case s1ap.S1_SETUP_REQUEST:
@@ -135,11 +134,38 @@ func (s *Server) startHandler() {
 					s.send(msg.conn, buf)
 				case s1ap.INITIAL_UE_MESSAGE:
 					log.Println("INITIAL UE MESSAGE")
-					// Parse the message.
 					enb_ie_s1ap_id, err := s1ap.InitialUEMessageHandle(msg.p)
-					fmt.Println("YYY enb_ie_s1ap_id", enb_ie_s1ap_id)
+					if err != nil {
+						log.Println("Initial UE Message error")
+						continue
+					}
+					s.enb_ie_s1ap_id = enb_ie_s1ap_id
+					mmebuf := []byte{
+						0x07, 0x52, 0x00, 0x37, 0x74, 0x76, 0x61, 0x5c,
+						0xb6, 0xd3, 0x7a, 0x91, 0x7d, 0x05, 0x72, 0x74,
+						0x61, 0xb2, 0x41, 0x10, 0x7e, 0x0f, 0x9d, 0x7d,
+						0x5a, 0xcb, 0x80, 0x00, 0x9f, 0xb3, 0xb3, 0x19,
+						0x2a, 0x4c, 0x72, 0x12,
+					}
+					payload, err := s1ap.DownlinkNASTransport(enb_ie_s1ap_id, mmebuf)
+					if err != nil {
+						log.Println("DownlinkNASTransport error")
+						continue
+					}
+					SCTPDumpBuf(payload)
+					buf := append(msg.header, payload...)
+					s.send(msg.conn, buf)
+				case s1ap.UPLINK_NAS_TRANSPORT:
+					s1ap.UplinkNASTransportHandle(msg.p)
 
-					payload, err := s1ap.DownlinkNASTransport(enb_ie_s1ap_id)
+					// Authentication Response.
+					// Security Mode Complete.
+					log.Println("UPLINK NAS TRANSPORT")
+					mmebuf := []byte{
+						0x37, 0x9f, 0x76, 0xaf, 0xd9, 0x00, 0x07, 0x5d,
+						0x02, 0x00, 0x02, 0x80, 0x20,
+					}
+					payload, err := s1ap.DownlinkNASTransport(s.enb_ie_s1ap_id, mmebuf)
 					if err != nil {
 						log.Println("DownlinkNASTransport error")
 						continue
@@ -148,7 +174,6 @@ func (s *Server) startHandler() {
 					buf := append(msg.header, payload...)
 					s.send(msg.conn, buf)
 				default:
-					log.Println("UNKNOWN MESSAGE")
 				}
 				s1ap.Free(msg.p)
 			case <-s.done:

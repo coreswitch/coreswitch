@@ -118,7 +118,6 @@ func InitialUEMessageHandle(packet unsafe.Pointer) (int32, error) {
 	for _, ie := range ies {
 		switch ie.id {
 		case C.ProtocolIE_ID_id_eNB_UE_S1AP_ID:
-			// ENB-UE-S1AP-ID.h:typedef long	 ENB_UE_S1AP_ID_t;
 			enb_ie_s1ap_id_c := (*C.ENB_UE_S1AP_ID_t)(unsafe.Pointer(&ie.value.choice))
 			enb_ie_s1ap_id = (int32)(*enb_ie_s1ap_id_c)
 		case C.ProtocolIE_ID_id_NAS_PDU:
@@ -128,6 +127,52 @@ func InitialUEMessageHandle(packet unsafe.Pointer) (int32, error) {
 		case C.ProtocolIE_ID_id_EUTRAN_CGI:
 			//EUTRAN_CGI = &ie->value.choice.EUTRAN_CGI;
 		case C.ProtocolIE_ID_id_S_TMSI:
+			//S_TMSI = &ie->value.choice.S_TMSI;
+		default:
+		}
+	}
+	return enb_ie_s1ap_id, nil
+}
+
+func UplinkNASTransportHandle(packet unsafe.Pointer) (int32, error) {
+	pdu := (*C.S1AP_PDU_t)(packet)
+	msg := *(**C.InitiatingMessage_t)(unsafe.Pointer(&pdu.choice))
+	val := (*C.UplinkNASTransport_t)(unsafe.Pointer(&msg.value.choice))
+
+	var ies []*C.UplinkNASTransport_IEs_t
+	slice := (*reflect.SliceHeader)((unsafe.Pointer(&ies)))
+	slice.Cap = (int)(val.protocolIEs.list.count)
+	slice.Len = (int)(val.protocolIEs.list.count)
+	slice.Data = uintptr(unsafe.Pointer(val.protocolIEs.list.array))
+
+	var enb_ie_s1ap_id int32
+
+	for _, ie := range ies {
+		switch ie.id {
+		case C.ProtocolIE_ID_id_eNB_UE_S1AP_ID:
+			fmt.Println("IE: eNB_UE_S1AP_ID")
+			enb_ie_s1ap_id_c := (*C.ENB_UE_S1AP_ID_t)(unsafe.Pointer(&ie.value.choice))
+			enb_ie_s1ap_id = (int32)(*enb_ie_s1ap_id_c)
+		case C.ProtocolIE_ID_id_NAS_PDU:
+			fmt.Println("IE: NAS_PDU")
+			// OCTET_STRING_T
+			// typedef struct OCTET_STRING {
+			// uint8_t *buf;   /* Buffer with consecutive OCTET_STRING bits */
+			// size_t size;    /* Size of the buffer */
+			//
+			// asn_struct_ctx_t _asn_ctx;      /* Parsing across buffer boundaries */
+			// } OCTET_STRING_t;
+			nas_pdu := (*C.NAS_PDU_t)(unsafe.Pointer(&ie.value.choice))
+			nas_pdu_len := (int)(nas_pdu.size)
+			fmt.Println("NAS_PDU_LEN", nas_pdu_len)
+		case C.ProtocolIE_ID_id_TAI:
+			fmt.Println("IE: TAI")
+			//TAI = &ie->value.choice.TAI;
+		case C.ProtocolIE_ID_id_EUTRAN_CGI:
+			fmt.Println("IE: EUTRAN_CGI")
+			//EUTRAN_CGI = &ie->value.choice.EUTRAN_CGI;
+		case C.ProtocolIE_ID_id_S_TMSI:
+			fmt.Println("IE: S_TMSI")
 			//S_TMSI = &ie->value.choice.S_TMSI;
 		default:
 		}
@@ -166,8 +211,9 @@ func Decode(buf []byte) (unsafe.Pointer, int, error) {
 		case C.InitiatingMessage__value_PR_S1SetupRequest:
 			typ = S1_SETUP_REQUEST
 		case C.InitiatingMessage__value_PR_InitialUEMessage:
-			//InitialUEMessageHandle(packet)
 			typ = INITIAL_UE_MESSAGE
+		case C.InitiatingMessage__value_PR_UplinkNASTransport:
+			typ = UPLINK_NAS_TRANSPORT
 		default:
 		}
 	case C.S1AP_PDU_PR_successfulOutcome:
