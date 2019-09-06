@@ -156,7 +156,13 @@ func (s *Server) startHandler() {
 					buf := append(msg.header, payload...)
 					s.send(msg.conn, buf)
 				case s1ap.UPLINK_NAS_TRANSPORT:
-					s1ap.UplinkNASTransportHandle(msg.p)
+					_, eps_mmm_type, err := s1ap.UplinkNASTransportHandle(msg.p)
+					if eps_mmm_type != s1ap.NAS_EPS_AUTH_RESPONSE {
+						if eps_mmm_type == s1ap.NAS_EPS_SECURITY_MODE_COMPLETE {
+							fmt.Println("XXX NAS_EPS_SECURITY_MODE_COMPLETE received need handle it")
+						}
+						continue
+					}
 
 					// Authentication Response.
 					// Security Mode Complete.

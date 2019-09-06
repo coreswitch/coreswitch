@@ -134,7 +134,10 @@ func InitialUEMessageHandle(packet unsafe.Pointer) (int32, error) {
 	return enb_ie_s1ap_id, nil
 }
 
-func UplinkNASTransportHandle(packet unsafe.Pointer) (int32, error) {
+func NAS_PDU_Handle() {
+}
+
+func UplinkNASTransportHandle(packet unsafe.Pointer) (int32, int, error) {
 	pdu := (*C.S1AP_PDU_t)(packet)
 	msg := *(**C.InitiatingMessage_t)(unsafe.Pointer(&pdu.choice))
 	val := (*C.UplinkNASTransport_t)(unsafe.Pointer(&msg.value.choice))
@@ -146,6 +149,7 @@ func UplinkNASTransportHandle(packet unsafe.Pointer) (int32, error) {
 	slice.Data = uintptr(unsafe.Pointer(val.protocolIEs.list.array))
 
 	var enb_ie_s1ap_id int32
+	var eps_mmm_type int
 
 	for _, ie := range ies {
 		switch ie.id {
@@ -163,8 +167,54 @@ func UplinkNASTransportHandle(packet unsafe.Pointer) (int32, error) {
 			// asn_struct_ctx_t _asn_ctx;      /* Parsing across buffer boundaries */
 			// } OCTET_STRING_t;
 			nas_pdu := (*C.NAS_PDU_t)(unsafe.Pointer(&ie.value.choice))
-			nas_pdu_len := (int)(nas_pdu.size)
-			fmt.Println("NAS_PDU_LEN", nas_pdu_len)
+
+			var nas_pdu_buf []byte
+			slice := (*reflect.SliceHeader)((unsafe.Pointer(&nas_pdu_buf)))
+			slice.Cap = (int)(nas_pdu.size)
+			slice.Len = (int)(nas_pdu.size)
+			slice.Data = uintptr(unsafe.Pointer(nas_pdu.buf))
+
+			fmt.Println("NAS_PDU_LEN", len(nas_pdu_buf))
+			for _, val := range nas_pdu_buf {
+				fmt.Printf("%02x ", val)
+			}
+			fmt.Printf("\n")
+			var securityHeaderType byte
+			var protocolDisc byte
+			for len(nas_pdu_buf) > 0 {
+				securityHeaderType = (nas_pdu_buf[0] & 0xf0) >> 4
+				protocolDisc = (nas_pdu_buf[0] & 0x0f)
+				nas_pdu_buf = nas_pdu_buf[1:]
+				fmt.Printf("securityHeaderType: %02x\n", securityHeaderType)
+				fmt.Printf("protocolDisc: %02x\n", protocolDisc)
+
+				if protocolDisc != 7 {
+					return 0, 0, fmt.Errorf("Protocol discrimiter is not EPS MMM")
+				}
+
+				switch securityHeaderType {
+				case 0:
+					fmt.Printf("MMM Type %02x\n", nas_pdu_buf[0])
+					typ := nas_pdu_buf[0]
+					nas_pdu_buf = nas_pdu_buf[1:]
+					switch typ {
+					case 0x53:
+						eps_mmm_type = NAS_EPS_AUTH_RESPONSE
+						if len(nas_pdu_buf) > 0 {
+							len := nas_pdu_buf[0]
+							nas_pdu_buf = nas_pdu_buf[len+1:]
+						}
+					case 0x5e:
+						eps_mmm_type = NAS_EPS_SECURITY_MODE_COMPLETE
+					default:
+						eps_mmm_type = 0
+					}
+				case 4:
+					nas_pdu_buf = nas_pdu_buf[5:]
+				default:
+					return 0, 0, fmt.Errorf("Security header type is not known %d", securityHeaderType)
+				}
+			}
 		case C.ProtocolIE_ID_id_TAI:
 			fmt.Println("IE: TAI")
 			//TAI = &ie->value.choice.TAI;
@@ -177,7 +227,7 @@ func UplinkNASTransportHandle(packet unsafe.Pointer) (int32, error) {
 		default:
 		}
 	}
-	return enb_ie_s1ap_id, nil
+	return enb_ie_s1ap_id, eps_mmm_type, nil
 }
 
 func Decode(buf []byte) (unsafe.Pointer, int, error) {
