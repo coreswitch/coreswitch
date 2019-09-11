@@ -157,28 +157,35 @@ func (s *Server) startHandler() {
 					s.send(msg.conn, buf)
 				case s1ap.UPLINK_NAS_TRANSPORT:
 					_, eps_mmm_type, err := s1ap.UplinkNASTransportHandle(msg.p)
-					if eps_mmm_type != s1ap.NAS_EPS_AUTH_RESPONSE {
-						if eps_mmm_type == s1ap.NAS_EPS_SECURITY_MODE_COMPLETE {
-							fmt.Println("XXX NAS_EPS_SECURITY_MODE_COMPLETE received need handle it")
-						}
-						continue
-					}
-
-					// Authentication Response.
-					// Security Mode Complete.
-					log.Println("UPLINK NAS TRANSPORT")
-					mmebuf := []byte{
-						0x37, 0x9f, 0x76, 0xaf, 0xd9, 0x00, 0x07, 0x5d,
-						0x02, 0x00, 0x02, 0x80, 0x20,
-					}
-					payload, err := s1ap.DownlinkNASTransport(s.enb_ie_s1ap_id, mmebuf)
 					if err != nil {
-						log.Println("DownlinkNASTransport error")
 						continue
 					}
-					SCTPDumpBuf(payload)
-					buf := append(msg.header, payload...)
-					s.send(msg.conn, buf)
+					switch eps_mmm_type {
+					case s1ap.NAS_EPS_AUTH_RESPONSE:
+						mmebuf := []byte{
+							0x37, 0x9f, 0x76, 0xaf, 0xd9, 0x00, 0x07, 0x5d,
+							0x02, 0x00, 0x02, 0x80, 0x20,
+						}
+						payload, err := s1ap.DownlinkNASTransport(s.enb_ie_s1ap_id, mmebuf)
+						if err != nil {
+							log.Println("DownlinkNASTransport error")
+							continue
+						}
+						SCTPDumpBuf(payload)
+						buf := append(msg.header, payload...)
+						s.send(msg.conn, buf)
+					case s1ap.NAS_EPS_SECURITY_MODE_COMPLETE:
+						payload, err := s1ap.InitialContextSetupRequest(s.enb_ie_s1ap_id)
+						if err != nil {
+							log.Println("InitialContextSetupRequest error")
+							continue
+						}
+						SCTPDumpBuf(payload)
+						buf := append(msg.header, payload...)
+						s.send(msg.conn, buf)
+					default:
+						fmt.Println("Skip unknown MMM type")
+					}
 				default:
 				}
 				s1ap.Free(msg.p)

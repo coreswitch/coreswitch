@@ -145,18 +145,101 @@ DownlinkNASTransportBuild(S1AP_PDU_t *pdu, long enb_ie_s1ap_id, unsigned char *m
   nas_pdu->size = mmebuf_len;
   nas_pdu->buf = calloc(mmebuf_len, 1);
   memcpy(nas_pdu->buf, mmebuf, mmebuf_len);
-
-  /* nas_pdu->size = 36; */
-  /* nas_pdu->buf = calloc(36, 1); */
-  /* unsigned char nas_pdu_data[36] = { 0x07,0x52,0x00,0x37,0x74,0x76,0x61,0x5c, */
-  /*                                    0xb6,0xd3,0x7a,0x91,0x7d,0x05,0x72,0x74, */
-  /*                                    0x61,0xb2,0x41,0x10,0x7e,0x0f,0x9d,0x7d, */
-  /*                                    0x5a,0xcb,0x80,0x00,0x9f,0xb3,0xb3,0x19, */
-  /*                                    0x2a,0x4c,0x72,0x12 }; */
-  /* memcpy(nas_pdu->buf, nas_pdu_data, 36); */
 }
 
 void
 UplinkNASTransportBuild(S1AP_PDU_t *pdu)
 {
+}
+
+void
+InitialContextSetupRequestBuild(S1AP_PDU_t *pdu, long enb_ie_s1ap_id)
+{
+  InitiatingMessage_t *initiating = calloc(sizeof(InitiatingMessage_t), 1);
+  InitialContextSetupRequest_t *context = NULL;
+  InitialContextSetupRequestIEs_t *ie = NULL;
+  MME_UE_S1AP_ID_t *mme_ue_s1ap_id = NULL;
+  ENB_UE_S1AP_ID_t *enb_ue_s1ap_id = NULL;
+  UEAggregateMaximumBitrate_t *max_bitrate = NULL;
+  E_RABToBeSetupListCtxtSUReq_t *setup_list = NULL;
+  UESecurityCapabilities_t *sec_cap = NULL;
+  SecurityKey_t *sec_key = NULL;
+
+  memset(pdu, 0, sizeof(S1AP_PDU_t));
+
+  pdu->present = S1AP_PDU_PR_initiatingMessage;
+  pdu->choice.initiatingMessage = initiating;
+
+  initiating->procedureCode = ProcedureCode_id_InitialContextSetup;
+  initiating->criticality = Criticality_reject;
+  initiating->value.present = InitiatingMessage__value_PR_InitialContextSetupRequest;
+
+  context = &initiating->value.choice.InitialContextSetupRequest;
+
+  // MME UE.
+  ie = calloc(sizeof(InitialContextSetupRequestIEs_t), 1);
+  ASN_SEQUENCE_ADD(&context->protocolIEs, ie);
+
+  ie->id = ProtocolIE_ID_id_MME_UE_S1AP_ID;
+  ie->criticality = Criticality_reject;
+  ie->value.present = InitialContextSetupRequestIEs__value_PR_ENB_UE_S1AP_ID;
+
+  mme_ue_s1ap_id = &ie->value.choice.MME_UE_S1AP_ID;
+
+  // eNB UE.
+  ie = calloc(sizeof(InitialContextSetupRequestIEs_t), 1);
+  ASN_SEQUENCE_ADD(&context->protocolIEs, ie);
+
+  ie->id = ProtocolIE_ID_id_eNB_UE_S1AP_ID;
+  ie->criticality = Criticality_reject;
+  ie->value.present = InitialContextSetupRequestIEs__value_PR_ENB_UE_S1AP_ID;
+
+  enb_ue_s1ap_id = &ie->value.choice.ENB_UE_S1AP_ID;
+
+  // Fill in values.
+  *mme_ue_s1ap_id = 1;
+  *enb_ue_s1ap_id = enb_ie_s1ap_id;
+
+  // uEAggregate_MaximumBitrates
+  ie = calloc(sizeof(InitialContextSetupRequestIEs_t), 1);
+  ASN_SEQUENCE_ADD(&context->protocolIEs, ie);
+
+  ie->id = ProtocolIE_ID_id_uEaggregateMaximumBitrate;
+  ie->criticality = Criticality_reject;
+  ie->value.present = InitialContextSetupRequestIEs__value_PR_UEAggregateMaximumBitrate;
+
+  max_bitrate = &ie->value.choice.UEAggregateMaximumBitrate;
+
+  asn_uint642INTEGER(&max_bitrate->uEaggregateMaximumBitRateDL, 200000000);
+  asn_uint642INTEGER(&max_bitrate->uEaggregateMaximumBitRateUL, 100000000);
+
+  // E_RABToBeSetupListCtxtSUReq
+  /* ie = calloc(sizeof(InitialContextSetupRequestIEs_t), 1); */
+  /* ASN_SEQUENCE_ADD(&context->protocolIEs, ie); */
+
+  /* ie->id = ProtocolIE_ID_id_E_RABToBeSetupListCtxtSUReq; */
+  /* ie->criticality = Criticality_reject; */
+  /* ie->value.present = InitialContextSetupRequestIEs__value_PR_E_RABToBeSetupListCtxtSUReq; */
+
+  /* setup_list = &ie->value.choice.E_RABToBeSetupListCtxtSUReq; */
+
+  // UESecurityCapabilities
+  /* ie = calloc(sizeof(InitialContextSetupRequestIEs_t), 1); */
+  /* ASN_SEQUENCE_ADD(&context->protocolIEs, ie); */
+
+  /* ie->id = ProtocolIE_ID_id_UESecurityCapabilities; */
+  /* ie->criticality = Criticality_reject; */
+  /* ie->value.present = InitialContextSetupRequestIEs__value_PR_UESecurityCapabilities; */
+
+  /* sec_cap = &ie->value.choice.UESecurityCapabilities; */
+
+  // SecurityKey
+  /* ie = calloc(sizeof(InitialContextSetupRequestIEs_t), 1); */
+  /* ASN_SEQUENCE_ADD(&context->protocolIEs, ie); */
+
+  /* ie->id = ProtocolIE_ID_id_SecurityKey; */
+  /* ie->criticality = Criticality_reject; */
+  /* ie->value.present =InitialContextSetupRequestIEs__value_PR_SecurityKey; */
+
+  /* sec_key = &ie->value.choice.SecurityKey; */
 }

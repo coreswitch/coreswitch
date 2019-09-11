@@ -28,6 +28,13 @@ func DownlinkNASTransport(enb_ie_s1ap_id int32, mmebuf []byte) ([]byte, error) {
 	return Encode(pdu)
 }
 
+func InitialContextSetupRequest(enb_ie_s1ap_id int32) ([]byte, error) {
+	pdu := (*C.S1AP_PDU_t)(C.calloc(C.sizeof_struct_S1AP_PDU, 1))
+	C.InitialContextSetupRequestBuild(pdu,
+		(C.long)(enb_ie_s1ap_id))
+	return Encode(pdu)
+}
+
 func UplinkNASTransport() ([]byte, error) {
 	pdu := (*C.S1AP_PDU_t)(C.calloc(C.sizeof_struct_S1AP_PDU, 1))
 	C.UplinkNASTransportBuild(pdu)
