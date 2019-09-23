@@ -9,6 +9,11 @@ import (
 	"unsafe"
 
 	"github.com/coreswitch/coreswitch/pkg/s1ap"
+	"github.com/fiorix/go-diameter/diam"
+	"github.com/fiorix/go-diameter/diam/avp"
+	"github.com/fiorix/go-diameter/diam/datatype"
+	"github.com/fiorix/go-diameter/diam/dict"
+	"github.com/fiorix/go-diameter/diam/sm"
 	"github.com/ishidawataru/sctp"
 )
 
@@ -242,14 +247,65 @@ func (s *Server) startServer() {
 
 // Start() function initiate MME services.
 func (s *Server) Start() error {
-	if s.done != nil {
-		return fmt.Errorf("Server already started")
+	// Diameter test.
+	cfg := &sm.Settings{
+		OriginHost:       datatype.DiameterIdentity("mme.coreswitch.io"),
+		OriginRealm:      datatype.DiameterIdentity("coreswitch.io"),
+		VendorID:         datatype.Unsigned32(10415),
+		ProductName:      "go-diameter-s6a",
+		OriginStateID:    datatype.Unsigned32(time.Now().Unix()),
+		FirmwareRevision: 1,
+		HostIPAddresses: []datatype.Address{
+			datatype.Address(net.ParseIP("172.16.0.53")),
+		},
 	}
-	s.ch = make(chan *message, 1024)
-	s.done = make(chan interface{})
 
-	s.startHandler()
-	s.startServer()
+	mux := sm.New(cfg)
+
+	cli := &sm.Client{
+		Dict:               dict.Default,
+		Handler:            mux,
+		MaxRetransmits:     0,
+		RetransmitInterval: time.Second,
+		EnableWatchdog:     true,
+		WatchdogInterval:   time.Duration(5) * time.Second,
+		SupportedVendorID: []*diam.AVP{
+			diam.NewAVP(avp.SupportedVendorID, avp.Mbit, 0, datatype.Unsigned32(10415)),
+		},
+		VendorSpecificApplicationID: []*diam.AVP{
+			diam.NewAVP(avp.VendorSpecificApplicationID, avp.Mbit, 0, &diam.GroupedAVP{
+				AVP: []*diam.AVP{
+					diam.NewAVP(avp.AuthApplicationID, avp.Mbit, 0, datatype.Unsigned32(16777251)),
+					diam.NewAVP(avp.VendorID, avp.Mbit, 0, datatype.Unsigned32(10415)),
+				},
+			}),
+		},
+	}
+
+	m := diam.NewRequest(diam.AuthenticationInformation, diam.TGPP_S6A_APP_ID, dict.Default)
+	fmt.Println(m)
+
+	conn, err := cli.DialNetwork("tcp4", "172.16.0.52:3868")
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Println(conn)
+	// err = sendAIR(conn, cfg)
+	// if err != nil {
+	// 	log.Fatal(err)
+	// }
+
+	///////////////////
+	// SCTP S1AP Server.
+	// if s.done != nil {
+	// 	return fmt.Errorf("Server already started")
+	// }
+	// s.ch = make(chan *message, 1024)
+	// s.done = make(chan interface{})
+
+	// s.startHandler()
+	// s.startServer()
+	///////////////////
 
 	return nil
 }
