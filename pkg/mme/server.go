@@ -12,6 +12,7 @@ import (
 	"github.com/ishidawataru/sctp"
 )
 
+// ServerConfig keep MME server configuration.
 type ServerConfig struct {
 	retryTime time.Duration
 }
@@ -243,13 +244,18 @@ func (s *Server) startServer() {
 // Start function initiate MME services.
 func (s *Server) Start() error {
 	diamOpt := &DiamOpt{
-		originHost:  "mme.coreswitch.io",
-		originRealm: "coreswitch.io",
-		vendorID:    10415,
-		hostAddress: "172.16.0.53",
+		originHost:       "mme.coreswitch.io",
+		originRealm:      "coreswitch.io",
+		vendorID:         10415,
+		appID:            16777251,
+		hostAddress:      "172.16.0.53",
+		productName:      "coreswitch",
+		firmwareRevision: 1,
+		hssConnMethod:    "tcp4",
 	}
 	diam := NewDiamClient(diamOpt)
 	diam.Start()
+	// diam.Stop()
 
 	// err = sendAIR(conn, cfg)
 	// if err != nil {
