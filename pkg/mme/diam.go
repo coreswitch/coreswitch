@@ -111,12 +111,55 @@ func NewDiamClient(opt *DiamOpt) *DiamClient {
 		},
 	}
 
+	done := make(chan struct{}, 1000)
+	mux.HandleIdx(
+		diam.CommandIndex{AppID: diam.TGPP_S6A_APP_ID, Code: diam.AuthenticationInformation, Request: false},
+		handleAuthenticationInformationAnswer(done))
 	mux.HandleIdx(diam.ALL_CMD_INDEX, handleAll())
 
 	return &DiamClient{
 		cli: cli,
 		opt: opt,
 		cfg: cfg,
+	}
+}
+
+type ExperimentalResult struct {
+	ExperimentalResultCode datatype.Unsigned32 `avp:"Experimental-Result-Code"`
+}
+
+type AuthenticationInfo struct {
+	EUtranVector EUtranVector `avp:"E-UTRAN-Vector"`
+}
+
+type EUtranVector struct {
+	RAND  datatype.OctetString `avp:"RAND"`
+	XRES  datatype.OctetString `avp:"XRES"`
+	AUTN  datatype.OctetString `avp:"AUTN"`
+	KASME datatype.OctetString `avp:"KASME"`
+}
+type AIA struct {
+	SessionID          datatype.UTF8String       `avp:"Session-Id"`
+	ResultCode         datatype.Unsigned32       `avp:"Result-Code"`
+	OriginHost         datatype.DiameterIdentity `avp:"Origin-Host"`
+	OriginRealm        datatype.DiameterIdentity `avp:"Origin-Realm"`
+	AuthSessionState   datatype.UTF8String       `avp:"Auth-Session-State"`
+	ExperimentalResult ExperimentalResult        `avp:"Experimental-Result"`
+	AIs                []AuthenticationInfo      `avp:"Authentication-Info"`
+}
+
+func handleAuthenticationInformationAnswer(done chan struct{}) diam.HandlerFunc {
+	return func(c diam.Conn, m *diam.Message) {
+		log.Infof("Received Authentication-Information Answer from %s\n%s\n", c.RemoteAddr(), m)
+		var aia AIA
+		err := m.Unmarshal(&aia)
+		if err != nil {
+			log.Infof("AIA Unmarshal failed: %s", err)
+		} else {
+			log.Infof("Unmarshaled Authentication-Information Answer:\n%#+v\n", aia)
+		}
+		ok := struct{}{}
+		done <- ok
 	}
 }
 
