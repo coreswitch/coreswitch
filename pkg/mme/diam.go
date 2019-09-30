@@ -116,6 +116,9 @@ func NewDiamClient(opt *DiamOpt) *DiamClient {
 	mux.HandleIdx(
 		diam.CommandIndex{AppID: diam.TGPP_S6A_APP_ID, Code: diam.AuthenticationInformation, Request: false},
 		handleAuthenticationInformationAnswer(done))
+	mux.HandleIdx(
+		diam.CommandIndex{AppID: diam.TGPP_S6A_APP_ID, Code: diam.UpdateLocation, Request: false},
+		handleUpdateLocationAnswer(done))
 	mux.HandleIdx(diam.ALL_CMD_INDEX, handleAll())
 
 	return &DiamClient{
@@ -151,6 +154,57 @@ type AIA struct {
 	AIs                []AuthenticationInfo      `avp:"Authentication-Info"`
 }
 
+type AMBR struct {
+	MaxRequestedBandwidthUL uint32 `avp:"Max-Requested-Bandwidth-UL"`
+	MaxRequestedBandwidthDL uint32 `avp:"Max-Requested-Bandwidth-DL"`
+}
+
+type AllocationRetentionPriority struct {
+	PriorityLevel           uint32 `avp:"Priority-Level"`
+	PreemptionCapability    int32  `avp:"Pre-emption-Capability"`
+	PreemptionVulnerability int32  `avp:"Pre-emption-Vulnerability"`
+}
+
+type EPSSubscribedQoSProfile struct {
+	QoSClassIdentifier          int32                       `avp:"QoS-Class-Identifier"`
+	AllocationRetentionPriority AllocationRetentionPriority `avp:"Allocation-Retention-Priority"`
+}
+
+type APNConfiguration struct {
+	ContextIdentifier       uint32                  `avp:"Context-Identifier"`
+	PDNType                 int32                   `avp:"PDN-Type"`
+	ServiceSelection        string                  `avp:"Service-Selection"`
+	EPSSubscribedQoSProfile EPSSubscribedQoSProfile `avp:"EPS-Subscribed-QoS-Profile"`
+	AMBR                    AMBR                    `avp:"AMBR"`
+}
+
+type APNConfigurationProfile struct {
+	ContextIdentifier                     uint32           `avp:"Context-Identifier"`
+	AllAPNConfigurationsIncludedIndicator int32            `avp:"All-APN-Configurations-Included-Indicator"`
+	APNConfiguration                      APNConfiguration `avp:"APN-Configuration"`
+}
+
+type SubscriptionData struct {
+	MSISDN                        datatype.OctetString    `avp:"MSISDN"`
+	AccessRestrictionData         uint32                  `avp:"Access-Restriction-Data"`
+	SubscriberStatus              int32                   `avp:"Subscriber-Status"`
+	NetworkAccessMode             int32                   `avp:"Network-Access-Mode"`
+	AMBR                          AMBR                    `avp:"AMBR"`
+	APNConfigurationProfile       APNConfigurationProfile `avp:"APN-Configuration-Profile"`
+	SubscribedPeriodicRauTauTimer uint32                  `avp:"Subscribed-Periodic-RAU-TAU-Timer"`
+}
+
+type ULA struct {
+	SessionID          string                    `avp:"Session-Id"`
+	ULAFlags           uint32                    `avp:"ULA-Flags"`
+	SubscriptionData   SubscriptionData          `avp:"Subscription-Data"`
+	AuthSessionState   int32                     `avp:"Auth-Session-State"`
+	ResultCode         uint32                    `avp:"Result-Code"`
+	OriginHost         datatype.DiameterIdentity `avp:"Origin-Host"`
+	OriginRealm        datatype.DiameterIdentity `avp:"Origin-Realm"`
+	ExperimentalResult ExperimentalResult        `avp:"Experimental-Result"`
+}
+
 func handleAuthenticationInformationAnswer(done chan struct{}) diam.HandlerFunc {
 	return func(c diam.Conn, m *diam.Message) {
 		log.Infof("Received Authentication-Information Answer from %s\n%s\n", c.RemoteAddr(), m)
@@ -160,6 +214,21 @@ func handleAuthenticationInformationAnswer(done chan struct{}) diam.HandlerFunc 
 			log.Infof("AIA Unmarshal failed: %s", err)
 		} else {
 			log.Infof("Unmarshaled Authentication-Information Answer:\n%#+v\n", aia)
+		}
+		ok := struct{}{}
+		done <- ok
+	}
+}
+
+func handleUpdateLocationAnswer(done chan struct{}) diam.HandlerFunc {
+	return func(c diam.Conn, m *diam.Message) {
+		log.Infof("Received Update-Location Answer from %s\n%s\n", c.RemoteAddr(), m)
+		var ula ULA
+		err := m.Unmarshal(&ula)
+		if err != nil {
+			log.Infof("ULA Unmarshal failed: %s", err)
+		} else {
+			log.Infof("Unmarshaled UL Answer:\n%#+v\n", ula)
 		}
 		ok := struct{}{}
 		done <- ok
