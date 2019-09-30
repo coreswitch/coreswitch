@@ -1,8 +1,11 @@
 package mme
 
 import (
+	"errors"
 	"fmt"
+	"math/rand"
 	"net"
+	"strconv"
 	"sync"
 	"time"
 
@@ -13,6 +16,7 @@ import (
 	"github.com/fiorix/go-diameter/diam/datatype"
 	"github.com/fiorix/go-diameter/diam/dict"
 	"github.com/fiorix/go-diameter/diam/sm"
+	"github.com/fiorix/go-diameter/diam/sm/smpeer"
 )
 
 // DiamClient is S6A diameter protocol client.
@@ -123,16 +127,40 @@ func handleAll() diam.HandlerFunc {
 }
 
 // sendAIR ...
-func sendAIR(c diam.Conn, cfg *sm.Settings) {
-	// meta, ok := smpeer.FromContext(c.Context())
-	// if !ok {
-	// 	// return errors.New("peer metadata unavailable")
-	// }
+func sendAIR(c diam.Conn, cfg *sm.Settings) (int64, error) {
+	meta, ok := smpeer.FromContext(c.Context())
+	if !ok {
+		return 0, errors.New("peer metadata unavailable")
+	}
 	m := diam.NewRequest(diam.AuthenticationInformation, diam.TGPP_S6A_APP_ID, dict.Default)
+	sid := "session;" + strconv.Itoa(int(rand.Uint32()))
+	m.NewAVP(avp.SessionID, avp.Mbit, 0, datatype.UTF8String(sid))
 	m.NewAVP(avp.OriginHost, avp.Mbit, 0, cfg.OriginHost)
 	m.NewAVP(avp.OriginRealm, avp.Mbit, 0, cfg.OriginRealm)
+	m.NewAVP(avp.DestinationRealm, avp.Mbit, 0, meta.OriginRealm)
+	m.NewAVP(avp.DestinationHost, avp.Mbit, 0, meta.OriginHost)
 
-	fmt.Println(m)
+	ueIMSI := "001010000000001"
+	m.NewAVP(avp.UserName, avp.Mbit, 0, datatype.UTF8String(ueIMSI))
+
+	m.NewAVP(avp.AuthSessionState, avp.Mbit, 0, datatype.Enumerated(0))
+
+	plmnID := "\x00\xF1\x10"
+	m.NewAVP(avp.VisitedPLMNID, avp.Vbit|avp.Mbit, uint32(cfg.VendorID), datatype.OctetString(plmnID))
+
+	m.NewAVP(avp.RequestedEUTRANAuthenticationInfo, avp.Vbit|avp.Mbit, uint32(cfg.VendorID), &diam.GroupedAVP{
+		AVP: []*diam.AVP{
+			diam.NewAVP(
+				avp.NumberOfRequestedVectors, avp.Vbit|avp.Mbit, uint32(cfg.VendorID), datatype.Unsigned32(3)),
+			diam.NewAVP(
+				avp.ImmediateResponsePreferred, avp.Vbit|avp.Mbit, uint32(cfg.VendorID), datatype.Unsigned32(0)),
+		},
+	})
+
+	n, err := m.WriteTo(c)
+	log.Infof("DIAM: %d written", n)
+
+	return n, err
 }
 
 // sendCER - CapabilitiesExchange Reqeust for SCTP client.
@@ -173,9 +201,7 @@ func (d *DiamClient) Start() {
 			time.Sleep(time.Second * 3)
 		}
 		log.Info("Diam connection success!")
-
-		//
-		// sendCER(d.conn, d.cfg)
+		sendAIR(d.conn, d.cfg)
 	}()
 }
 
