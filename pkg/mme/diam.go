@@ -6,6 +6,8 @@ import (
 	"sync"
 	"time"
 
+	log "github.com/coreswitch/log"
+
 	"github.com/fiorix/go-diameter/diam"
 	"github.com/fiorix/go-diameter/diam/avp"
 	"github.com/fiorix/go-diameter/diam/datatype"
@@ -16,9 +18,10 @@ import (
 // DiamClient is S6A diameter protocol client.
 type DiamClient struct {
 	cli  *sm.Client
+	opt  *DiamOpt
+	cfg  *sm.Settings
 	conn diam.Conn
 	wg   sync.WaitGroup
-	opt  *DiamOpt
 }
 
 // DiamOpt is DiamClient options.
@@ -40,9 +43,32 @@ type DiamOpt struct {
 func (opt *DiamOpt) connMethod() string {
 	if opt.hssConnMethod == "" {
 		return "tcp4"
-	} else {
-		return opt.hssConnMethod
 	}
+	return opt.hssConnMethod
+}
+
+// AppID ...
+func (opt *DiamOpt) AppID() uint32 {
+	if opt.appID == 0 {
+		return diam.TGPP_S6A_APP_ID
+	}
+	return opt.appID
+}
+
+// HssPort return HSSPort value.
+func (opt *DiamOpt) HssPort() string {
+	if opt.hssPort == "" {
+		return "3868"
+	}
+	return opt.hssPort
+}
+
+// HssAddress ...
+func (opt *DiamOpt) HssAddress() string {
+	if opt.hssAddress == "" {
+		return "127.0.0.1"
+	}
+	return opt.hssAddress
 }
 
 // NewDiamClient create new Diameter session for HSS.
@@ -74,40 +100,82 @@ func NewDiamClient(opt *DiamOpt) *DiamClient {
 		VendorSpecificApplicationID: []*diam.AVP{
 			diam.NewAVP(avp.VendorSpecificApplicationID, avp.Mbit, 0, &diam.GroupedAVP{
 				AVP: []*diam.AVP{
-					diam.NewAVP(avp.AuthApplicationID, avp.Mbit, 0, datatype.Unsigned32(opt.appID)),
+					diam.NewAVP(avp.AuthApplicationID, avp.Mbit, 0, datatype.Unsigned32(opt.AppID())),
 					diam.NewAVP(avp.VendorID, avp.Mbit, 0, datatype.Unsigned32(opt.vendorID)),
 				},
 			}),
 		},
 	}
 
+	mux.HandleIdx(diam.ALL_CMD_INDEX, handleAll())
+
 	return &DiamClient{
 		cli: cli,
 		opt: opt,
+		cfg: cfg,
 	}
+}
+
+func handleAll() diam.HandlerFunc {
+	return func(c diam.Conn, m *diam.Message) {
+		log.Infof("Received Meesage From %s\n%s\n", c.RemoteAddr(), m)
+	}
+}
+
+// sendAIR ...
+func sendAIR(c diam.Conn, cfg *sm.Settings) {
+	// meta, ok := smpeer.FromContext(c.Context())
+	// if !ok {
+	// 	// return errors.New("peer metadata unavailable")
+	// }
+	m := diam.NewRequest(diam.AuthenticationInformation, diam.TGPP_S6A_APP_ID, dict.Default)
+	m.NewAVP(avp.OriginHost, avp.Mbit, 0, cfg.OriginHost)
+	m.NewAVP(avp.OriginRealm, avp.Mbit, 0, cfg.OriginRealm)
+
+	fmt.Println(m)
+}
+
+// sendCER - CapabilitiesExchange Reqeust for SCTP client.
+func sendCER(c diam.Conn, cfg *sm.Settings) (int64, error) {
+	m := diam.NewRequest(diam.CapabilitiesExchange, diam.TGPP_S6A_APP_ID, dict.Default)
+
+	m.NewAVP(avp.OriginHost, avp.Mbit, 0, cfg.OriginHost)
+	m.NewAVP(avp.OriginRealm, avp.Mbit, 0, cfg.OriginRealm)
+	m.NewAVP(avp.OriginStateID, avp.Mbit, 0, cfg.OriginStateID)
+	for _, addr := range cfg.HostIPAddresses {
+		m.NewAVP(avp.HostIPAddress, avp.Mbit, 0, addr)
+	}
+
+	fmt.Println(m)
+
+	n, err := m.WriteTo(c)
+	log.Infof("DIAM: %d written", n)
+
+	return n, err
 }
 
 // Start initiate diameter client start.
 func (d *DiamClient) Start() {
-	fmt.Println("Start")
-	// m := diam.NewRequest(diam.AuthenticationInformation, diam.TGPP_S6A_APP_ID, dict.Default)
-	// fmt.Println(m)
+	log.Info("Start")
 
+	d.wg.Add(1)
 	go func() {
+		defer d.wg.Done()
 		for {
-			fmt.Println("Trying to connect diameter server")
-			// Right now DialNetworkTimeout will block until specified timeout.
-			// There is no way to cancel it with something like Context mechanism.
-			// So Stop() function may take up to timeout value.
-			conn, err := d.cli.DialNetwork("tcp4", "172.16.0.52:3868")
+			log.Info("Trying to connect diameter server")
+
+			conn, err := d.cli.DialNetwork(d.opt.connMethod(), d.opt.HssAddress()+":"+d.opt.HssPort())
 			if err == nil {
 				d.conn = conn
 				break
 			}
-			fmt.Println("Failed", err)
+			log.Warnf("Failed %s", err)
 			time.Sleep(time.Second * 3)
 		}
-		fmt.Println("Diam connection success!")
+		log.Info("Diam connection success!")
+
+		//
+		// sendCER(d.conn, d.cfg)
 	}()
 }
 
@@ -117,5 +185,5 @@ func (d *DiamClient) Stop() {
 	if d.conn != nil {
 		d.conn.Close()
 	}
-	// d.wg.Wait()
+	d.wg.Wait()
 }

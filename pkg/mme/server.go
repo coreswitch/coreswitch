@@ -247,11 +247,11 @@ func (s *Server) Start() error {
 		originHost:       "mme.coreswitch.io",
 		originRealm:      "coreswitch.io",
 		vendorID:         10415,
-		appID:            16777251,
 		hostAddress:      "172.16.0.53",
 		productName:      "coreswitch",
 		firmwareRevision: 1,
 		hssConnMethod:    "tcp4",
+		hssAddress:       "172.16.0.52",
 	}
 	diam := NewDiamClient(diamOpt)
 	diam.Start()
