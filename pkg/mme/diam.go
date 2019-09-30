@@ -21,12 +21,19 @@ import (
 
 // DiamClient is S6A diameter protocol client.
 type DiamClient struct {
-	cli  *sm.Client
-	opt  *DiamOpt
-	cfg  *sm.Settings
-	done chan struct{}
-	conn diam.Conn
-	wg   sync.WaitGroup
+	cli   *sm.Client
+	opt   *DiamOpt
+	cfg   *sm.Settings
+	param *DiamParam
+	done  chan struct{}
+	conn  diam.Conn
+	wg    sync.WaitGroup
+}
+
+// DiamParam store parameter for HSS session.
+type DiamParam struct {
+	ueIMSI string
+	plmnID string
 }
 
 // DiamOpt is DiamClient options.
@@ -242,7 +249,7 @@ func handleAll() diam.HandlerFunc {
 }
 
 // sendAIR ...
-func sendAIR(c diam.Conn, cfg *sm.Settings) (int64, error) {
+func sendAIR(c diam.Conn, cfg *sm.Settings, param *DiamParam) (int64, error) {
 	meta, ok := smpeer.FromContext(c.Context())
 	if !ok {
 		return 0, errors.New("peer metadata unavailable")
@@ -254,14 +261,9 @@ func sendAIR(c diam.Conn, cfg *sm.Settings) (int64, error) {
 	m.NewAVP(avp.OriginRealm, avp.Mbit, 0, cfg.OriginRealm)
 	m.NewAVP(avp.DestinationRealm, avp.Mbit, 0, meta.OriginRealm)
 	m.NewAVP(avp.DestinationHost, avp.Mbit, 0, meta.OriginHost)
-
-	ueIMSI := "001010000000001"
-	m.NewAVP(avp.UserName, avp.Mbit, 0, datatype.UTF8String(ueIMSI))
-
+	m.NewAVP(avp.UserName, avp.Mbit, 0, datatype.UTF8String(param.ueIMSI))
 	m.NewAVP(avp.AuthSessionState, avp.Mbit, 0, datatype.Enumerated(0))
-
-	plmnID := "\x00\xF1\x10"
-	m.NewAVP(avp.VisitedPLMNID, avp.Vbit|avp.Mbit, uint32(cfg.VendorID), datatype.OctetString(plmnID))
+	m.NewAVP(avp.VisitedPLMNID, avp.Vbit|avp.Mbit, uint32(cfg.VendorID), datatype.OctetString(param.plmnID))
 
 	m.NewAVP(avp.RequestedEUTRANAuthenticationInfo, avp.Vbit|avp.Mbit, uint32(cfg.VendorID), &diam.GroupedAVP{
 		AVP: []*diam.AVP{
@@ -272,33 +274,11 @@ func sendAIR(c diam.Conn, cfg *sm.Settings) (int64, error) {
 		},
 	})
 
-	n, err := m.WriteTo(c)
-	log.Infof("DIAM: %d written", n)
-
-	return n, err
+	return m.WriteTo(c)
 }
 
 // sendCER - CapabilitiesExchange Reqeust for SCTP client.
-func sendCER(c diam.Conn, cfg *sm.Settings) (int64, error) {
-	m := diam.NewRequest(diam.CapabilitiesExchange, diam.TGPP_S6A_APP_ID, dict.Default)
-
-	m.NewAVP(avp.OriginHost, avp.Mbit, 0, cfg.OriginHost)
-	m.NewAVP(avp.OriginRealm, avp.Mbit, 0, cfg.OriginRealm)
-	m.NewAVP(avp.OriginStateID, avp.Mbit, 0, cfg.OriginStateID)
-	for _, addr := range cfg.HostIPAddresses {
-		m.NewAVP(avp.HostIPAddress, avp.Mbit, 0, addr)
-	}
-
-	fmt.Println(m)
-
-	n, err := m.WriteTo(c)
-	log.Infof("DIAM: %d written", n)
-
-	return n, err
-}
-
-// sendULR - Send Uppdate-Location Request
-func sendULROrig(c diam.Conn, cfg *sm.Settings) (int64, error) {
+func sendCER(c diam.Conn, cfg *sm.Settings, param *DiamParam) (int64, error) {
 	m := diam.NewRequest(diam.CapabilitiesExchange, diam.TGPP_S6A_APP_ID, dict.Default)
 
 	m.NewAVP(avp.OriginHost, avp.Mbit, 0, cfg.OriginHost)
@@ -319,7 +299,7 @@ func sendULROrig(c diam.Conn, cfg *sm.Settings) (int64, error) {
 const ULR_FLAGS = 1<<1 | 1<<5
 
 // sendULR send Update-Location Request.
-func sendULR(c diam.Conn, cfg *sm.Settings) (int64, error) {
+func sendULR(c diam.Conn, cfg *sm.Settings, param *DiamParam) (int64, error) {
 	meta, ok := smpeer.FromContext(c.Context())
 	if !ok {
 		return 0, errors.New("peer metadata unavailable")
@@ -331,26 +311,23 @@ func sendULR(c diam.Conn, cfg *sm.Settings) (int64, error) {
 	m.NewAVP(avp.OriginRealm, avp.Mbit, 0, cfg.OriginRealm)
 	m.NewAVP(avp.DestinationRealm, avp.Mbit, 0, meta.OriginRealm)
 	m.NewAVP(avp.DestinationHost, avp.Mbit, 0, meta.OriginHost)
-
-	ueIMSI := "001010000000001"
-	m.NewAVP(avp.UserName, avp.Mbit, 0, datatype.UTF8String(ueIMSI))
+	m.NewAVP(avp.UserName, avp.Mbit, 0, datatype.UTF8String(param.ueIMSI))
 	m.NewAVP(avp.AuthSessionState, avp.Mbit, 0, datatype.Enumerated(0))
-
 	m.NewAVP(avp.RATType, avp.Mbit, uint32(cfg.VendorID), datatype.Enumerated(1004))
 	m.NewAVP(avp.ULRFlags, avp.Vbit|avp.Mbit, uint32(cfg.VendorID), datatype.Unsigned32(ULR_FLAGS))
-
-	plmnID := "\x00\xF1\x10"
-	m.NewAVP(avp.VisitedPLMNID, avp.Vbit|avp.Mbit, uint32(cfg.VendorID), datatype.OctetString(plmnID))
+	m.NewAVP(avp.VisitedPLMNID, avp.Vbit|avp.Mbit, uint32(cfg.VendorID), datatype.OctetString(param.plmnID))
 	log.Infof("\nSending ULR to %s\n%s\n", c.RemoteAddr(), m)
-	n, err := m.WriteTo(c)
-	log.Infof("Received %d, Error: %v", n, err)
-
-	return n, err
+	return m.WriteTo(c)
 }
 
 // Start initiate diameter client start.
 func (d *DiamClient) Start() {
 	log.Info("Start")
+
+	d.param = &DiamParam{
+		ueIMSI: "001010000000001",
+		plmnID: "\x00\xF1\x10",
+	}
 
 	d.wg.Add(1)
 	go func() {
@@ -375,20 +352,29 @@ func (d *DiamClient) Start() {
 			d.conn = nil
 		}
 
-		_, err := sendAIR(d.conn, d.cfg)
+		_, err := sendAIR(d.conn, d.cfg, d.param)
 		if err != nil {
 			retryFunc()
 			goto retry
 		}
 		select {
 		case <-d.done:
+			log.Info("Authentication Information success")
 		case <-time.After(10 * time.Second):
 			log.Error("Authentication Information timeout")
 			retryFunc()
 			goto retry
 		}
-		_, err = sendULR(d.conn, d.cfg)
+		_, err = sendULR(d.conn, d.cfg, d.param)
 		if err != nil {
+			retryFunc()
+			goto retry
+		}
+		select {
+		case <-d.done:
+			log.Info("Update Location success")
+		case <-time.After(10 * time.Second):
+			log.Error("Update Location timeout")
 			retryFunc()
 			goto retry
 		}
