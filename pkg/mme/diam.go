@@ -24,6 +24,7 @@ type DiamClient struct {
 	cli  *sm.Client
 	opt  *DiamOpt
 	cfg  *sm.Settings
+	done chan struct{}
 	conn diam.Conn
 	wg   sync.WaitGroup
 }
@@ -118,9 +119,10 @@ func NewDiamClient(opt *DiamOpt) *DiamClient {
 	mux.HandleIdx(diam.ALL_CMD_INDEX, handleAll())
 
 	return &DiamClient{
-		cli: cli,
-		opt: opt,
-		cfg: cfg,
+		cli:  cli,
+		opt:  opt,
+		cfg:  cfg,
+		done: done,
 	}
 }
 
@@ -138,6 +140,7 @@ type EUtranVector struct {
 	AUTN  datatype.OctetString `avp:"AUTN"`
 	KASME datatype.OctetString `avp:"KASME"`
 }
+
 type AIA struct {
 	SessionID          datatype.UTF8String       `avp:"Session-Id"`
 	ResultCode         datatype.Unsigned32       `avp:"Result-Code"`
@@ -225,6 +228,57 @@ func sendCER(c diam.Conn, cfg *sm.Settings) (int64, error) {
 	return n, err
 }
 
+// sendULR - Send Uppdate-Location Request
+func sendULROrig(c diam.Conn, cfg *sm.Settings) (int64, error) {
+	m := diam.NewRequest(diam.CapabilitiesExchange, diam.TGPP_S6A_APP_ID, dict.Default)
+
+	m.NewAVP(avp.OriginHost, avp.Mbit, 0, cfg.OriginHost)
+	m.NewAVP(avp.OriginRealm, avp.Mbit, 0, cfg.OriginRealm)
+	m.NewAVP(avp.OriginStateID, avp.Mbit, 0, cfg.OriginStateID)
+	for _, addr := range cfg.HostIPAddresses {
+		m.NewAVP(avp.HostIPAddress, avp.Mbit, 0, addr)
+	}
+
+	fmt.Println(m)
+
+	n, err := m.WriteTo(c)
+	log.Infof("DIAM: %d written", n)
+
+	return n, err
+}
+
+const ULR_FLAGS = 1<<1 | 1<<5
+
+// sendULR send Update-Location Request.
+func sendULR(c diam.Conn, cfg *sm.Settings) (int64, error) {
+	meta, ok := smpeer.FromContext(c.Context())
+	if !ok {
+		return 0, errors.New("peer metadata unavailable")
+	}
+	sid := "session;" + strconv.Itoa(int(rand.Uint32()))
+	m := diam.NewRequest(diam.UpdateLocation, diam.TGPP_S6A_APP_ID, dict.Default)
+	m.NewAVP(avp.SessionID, avp.Mbit, 0, datatype.UTF8String(sid))
+	m.NewAVP(avp.OriginHost, avp.Mbit, 0, cfg.OriginHost)
+	m.NewAVP(avp.OriginRealm, avp.Mbit, 0, cfg.OriginRealm)
+	m.NewAVP(avp.DestinationRealm, avp.Mbit, 0, meta.OriginRealm)
+	m.NewAVP(avp.DestinationHost, avp.Mbit, 0, meta.OriginHost)
+
+	ueIMSI := "001010000000001"
+	m.NewAVP(avp.UserName, avp.Mbit, 0, datatype.UTF8String(ueIMSI))
+	m.NewAVP(avp.AuthSessionState, avp.Mbit, 0, datatype.Enumerated(0))
+
+	m.NewAVP(avp.RATType, avp.Mbit, uint32(cfg.VendorID), datatype.Enumerated(1004))
+	m.NewAVP(avp.ULRFlags, avp.Vbit|avp.Mbit, uint32(cfg.VendorID), datatype.Unsigned32(ULR_FLAGS))
+
+	plmnID := "\x00\xF1\x10"
+	m.NewAVP(avp.VisitedPLMNID, avp.Vbit|avp.Mbit, uint32(cfg.VendorID), datatype.OctetString(plmnID))
+	log.Infof("\nSending ULR to %s\n%s\n", c.RemoteAddr(), m)
+	n, err := m.WriteTo(c)
+	log.Infof("Received %d, Error: %v", n, err)
+
+	return n, err
+}
+
 // Start initiate diameter client start.
 func (d *DiamClient) Start() {
 	log.Info("Start")
@@ -232,6 +286,7 @@ func (d *DiamClient) Start() {
 	d.wg.Add(1)
 	go func() {
 		defer d.wg.Done()
+	retry:
 		for {
 			log.Info("Trying to connect diameter server")
 
@@ -244,7 +299,30 @@ func (d *DiamClient) Start() {
 			time.Sleep(time.Second * 3)
 		}
 		log.Info("Diam connection success!")
-		sendAIR(d.conn, d.cfg)
+
+		retryFunc := func() {
+			log.Error("Authentication Information timeout")
+			d.conn.Close()
+			d.conn = nil
+		}
+
+		_, err := sendAIR(d.conn, d.cfg)
+		if err != nil {
+			retryFunc()
+			goto retry
+		}
+		select {
+		case <-d.done:
+		case <-time.After(10 * time.Second):
+			log.Error("Authentication Information timeout")
+			retryFunc()
+			goto retry
+		}
+		_, err = sendULR(d.conn, d.cfg)
+		if err != nil {
+			retryFunc()
+			goto retry
+		}
 	}()
 }
 
